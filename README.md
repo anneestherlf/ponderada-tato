@@ -23,6 +23,8 @@ Análise de arquitetura, pipeline, processos, semáforos e deadlock de uma pulse
 
 Requisito: Python 3.8+ (só biblioteca padrão, nada para instalar).
 
+No Windows, troque `python3` por `python` nos comandos abaixo.
+
 ```bash
 cd ponderada/codigo
 
