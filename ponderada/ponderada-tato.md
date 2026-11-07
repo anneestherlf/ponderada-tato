@@ -298,9 +298,9 @@ O código está em [codigo/](codigo/), em Python 3 com threading. Cada script ro
 
 | Versão | Execução | Consumidas | Perdidas | Duplicadas | Travou? |
 |---|---|---|---|---|---|
-| 1 (sem sincronização) | 1 | 20.074 | 2.495 | 2.569 | Não |
-| 1 (sem sincronização) | 2 | 20.064 | 2.539 | 2.603 | Não |
-| 1 (sem sincronização) | 3 | 20.612 | 2.521 | 3.133 | Não |
+| 1 (sem sincronização) | 1 | 21.491 | 2.564 | 4.055 | Não |
+| 1 (sem sincronização) | 2 | 20.034 | 3.059 | 3.093 | Não |
+| 1 (sem sincronização) | 3 | 18.453 | 3.631 | 2.084 | Não |
 | 2 (semáforos) | 1 | 20.000 | 0 | 0 | Não |
 | 2 (semáforos) | 2 | 20.000 | 0 | 0 | Não |
 | 2 (semáforos) | 3 | 20.000 | 0 | 0 | Não |
@@ -310,7 +310,7 @@ O código está em [codigo/](codigo/), em Python 3 com threading. Cada script ro
 
 \* Na versão 3, as amostras 0 a 5 ficaram presas no buffer e as outras 19.994 nem chegaram a ser produzidas. Nenhuma chegou ao motor.
 
-Para conferir se os números da versão 1 fazem sentido: consumidas = 20.000 - perdidas + duplicadas. Execução 1: 20.000 - 2.495 + 2.569 = 20.074. Execução 2: 20.000 - 2.539 + 2.603 = 20.064. Execução 3: 20.000 - 2.521 + 3.133 = 20.612. Bate nas três, então os erros são mesmo efeito do contador corrompido, e não erro na contagem.
+Para conferir se os números da versão 1 fazem sentido: consumidas = 20.000 - perdidas + duplicadas. Execução 1: 20.000 - 2.564 + 4.055 = 21.491. Execução 2: 20.000 - 3.059 + 3.093 = 20.034. Execução 3: 20.000 - 3.631 + 2.084 = 18.453. Bate nas três, então os erros são mesmo efeito do contador corrompido, e não erro na contagem.
 
 ### Prints
 
@@ -342,7 +342,7 @@ Como aparece a duplicação: o produtor lê contador = 3 e é interrompido. O co
 
 Como aparece a perda: é o contrário. O consumidor lê 3 e é interrompido. O produtor insere uma amostra e grava 4. O consumidor volta e grava 3 - 1 = 2. Existem 3 amostras, mas o contador diz 2, então o produtor acha que tem espaço sobrando e escreve por cima de uma amostra que ainda não tinha sido consumida.
 
-Os dois erros apareceram em quantidade parecida (por volta de 2.500 cada, uns 12,5% das amostras), o que faz sentido, já que a corrida acontece dos dois lados.
+Nas três execuções, entre 10% e 20% das amostras foram perdidas ou duplicadas, e os números mudaram bastante de uma execução para outra. Isso é típico de condição de corrida: o resultado depende de onde o escalonador interrompe cada thread, que muda a cada vez. Na execução 1 sobraram mais duplicadas (consumiu 21.491, mais do que foi produzido), na execução 3 sobraram mais perdas (consumiu só 18.453), e na execução 2 as duas quase se cancelaram (20.034), o que mostra que olhar só o total de consumidas esconderia o problema.
 
 A versão 1 não travou em nenhuma das execuções. Com um produtor e um consumidor, o contador errado quase sempre fica entre 0 e N, então sempre alguma das threads consegue andar. O problema que apareceu foi outro: os dados ficaram errados sem nenhum aviso. Pensando na pulseira, isso é até pior do que travar, porque a pessoa não percebe. Uma amostra duplicada vira uma vibração baseada numa leitura velha (o poste já está mais perto do que a pulseira indica), e uma amostra perdida é um obstáculo que nunca vira vibração.
 
@@ -356,7 +356,7 @@ A versão 1 não travou em nenhuma das execuções. Com um produtor e um consumi
 
 Nas 3 execuções foram 20.000 consumidas, nenhuma perdida, nenhuma duplicada, o contador terminou em 0 e todas as amostras chegaram em ordem. Isso mesmo com o mesmo sleep(0) dentro da região crítica: a troca de thread continua acontecendo, mas não estraga nada, porque a outra thread não consegue entrar. E também não tem mais espera ocupada, a thread que não tem o que fazer vai para o estado Bloqueado (A3.3).
 
-A versão 2 levou uns 3,0 s contra 1,6 s da versão 1. Esse é o custo da sincronização. A versão 1 só é mais rápida porque está entregando dados errados.
+A versão 2 levou uns 0,17 s contra 0,03 s da versão 1, cerca de 5 vezes mais. Esse é o custo da sincronização. A versão 1 só é mais rápida porque está entregando dados errados.
 
 ### O que aconteceu na versão 3
 
