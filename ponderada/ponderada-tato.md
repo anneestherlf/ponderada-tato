@@ -119,9 +119,16 @@ Na V, instruções e dados usam o mesmo caminho até uma DRAM que demora 120 cic
 
 ![Caches do meu computador](img/caches.png)
 
-PREENCHER: tirar o print, salvar como img/caches.png e completar os valores abaixo.
+Print do CPU-Z no meu notebook (Windows). O processador é um Intel Core i5-1345U (13ª geração, Raptor Lake), que é híbrido: tem 2 núcleos de desempenho (P-cores) e 8 de eficiência (E-cores), por isso cada linha da cache aparece em duas partes.
 
-O meu processador tem a L1 dividida em L1 de instruções (___ KB) e L1 de dados (___ KB). A L2 (___) e a L3 (___) são unificadas.
+| Nível | Valor no CPU-Z | Como é dividido |
+|---|---|---|
+| L1 de dados (L1 Data) | 2 × 48 KB + 8 × 32 KB | uma por núcleo |
+| L1 de instruções (L1 Inst.) | 2 × 32 KB + 8 × 64 KB | uma por núcleo |
+| L2 | 2 × 1,25 MB + 2 × 2 MB | uma por P-core e uma para cada grupo de 4 E-cores |
+| L3 | 12 MB | uma só, compartilhada por todos os núcleos |
+
+Sim, a minha L1 é dividida: cada núcleo tem uma L1 só para dados e outra só para instruções. A L2 e a L3 não fazem essa separação, guardam dados e instruções juntos.
 
 Então ele é Harvard modificado. Dentro do núcleo ele funciona como Harvard, porque consegue buscar uma instrução e ler um dado no mesmo ciclo por caminhos separados (o que evita o conflito entre os estágios IF e MEM do pipeline da A2). Mas da L2 para baixo, e na RAM, instruções e dados ficam na mesma memória e no mesmo espaço de endereçamento, então para o sistema operacional e para quem programa ele é Von Neumann. É isso que permite, por exemplo, carregar um programa do disco como se fosse dado e depois executar. A L1 separada acaba sendo uma ideia de Harvard usada exatamente no ponto onde o gargalo de Von Neumann mais atrapalharia.
 
