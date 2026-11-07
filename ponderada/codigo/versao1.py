@@ -1,5 +1,5 @@
 """
-versao1.py — Ponderada CC08 (Tato), questão A4, Versão 1: SEM sincronização.
+versao1.py - Ponderada CC08 (Tato), questão A4, Versão 1: SEM sincronização.
 
 Autora: Anne Esther Lins Figueirôa  (D1 = 4, D2 = 3, N = 6)
 
@@ -115,7 +115,7 @@ def main() -> None:
     p.add_argument("--execucoes", type=int, default=3)
     a = p.parse_args()
 
-    print(f"VERSÃO 1 — sem sincronização | N = {N} | {a.amostras} amostras\n")
+    print(f"VERSÃO 1 - sem sincronização | N = {N} | {a.amostras} amostras\n")
     print(f"{'Exec':<5}{'Consumidas':>11}{'Perdidas':>10}{'Duplicadas':>12}"
           f"{'Travou':>8}{'Contador final':>16}{'Tempo (s)':>11}")
     for i in range(1, a.execucoes + 1):

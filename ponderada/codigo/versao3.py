@@ -1,5 +1,5 @@
 """
-versao3.py — Ponderada CC08 (Tato), questão A4, Versão 3: ORDEM TROCADA.
+versao3.py - Ponderada CC08 (Tato), questão A4, Versão 3: ORDEM TROCADA.
 
 Autora: Anne Esther Lins Figueirôa  (D1 = 4, D2 = 3, N = 6)
 
@@ -54,7 +54,7 @@ def executar(total: int) -> dict:
         for amostra in range(total):
             if not mutex.acquire(timeout=TIMEOUT_S):          # wait(mutex)
                 onde["produtor"] = f"esperando mutex (amostra {amostra})"; return
-            if not vazio.acquire(timeout=TIMEOUT_S):          # wait(vazio) — segurando mutex!
+            if not vazio.acquire(timeout=TIMEOUT_S):          # wait(vazio) - segurando mutex!
                 onde["produtor"] = f"segurando mutex, esperando vazio (amostra {amostra})"
                 return                                        # sai sem liberar: simula thread congelada
             buffer[idx["entrada"]] = amostra
@@ -99,7 +99,7 @@ def main() -> None:
     p.add_argument("--execucoes", type=int, default=3)
     a = p.parse_args()
 
-    print(f"VERSÃO 3 — produtor faz wait(mutex) antes de wait(vazio) | N = {N} | "
+    print(f"VERSÃO 3 - produtor faz wait(mutex) antes de wait(vazio) | N = {N} | "
           f"{a.amostras} amostras\n")
     print(f"{'Exec':<5}{'Consumidas':>11}{'Perdidas':>10}{'Duplicadas':>12}"
           f"{'Travou':>8}{'Tempo (s)':>11}")

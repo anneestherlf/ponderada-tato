@@ -1,10 +1,10 @@
-**Anne Esther Lins Figueirôa** | D1 = 4 | D2 = 3 | N = 6
+Anne Esther Lins Figueirôa | D1 = 4 | D2 = 3 | N = 6
 
-# Ponderada CC08 — Tato: do pipeline ao deadlock
+# Ponderada CC08: do pipeline ao deadlock (Tato)
 
-## Parâmetros individuais
+## Parâmetros
 
-Contagem de letras (acentos contam, espaços não):
+Contei só as letras do nome completo, sem os espaços:
 
 | Nome | Letras |
 |---|---|
@@ -12,130 +12,122 @@ Contagem de letras (acentos contam, espaços não):
 | Esther | 6 |
 | Lins | 4 |
 | Figueirôa | 9 |
-| **Total** | **23** |
+| Total | 23 |
 
-- **D1** = letras do primeiro nome = **4**
-- **D2** = último dígito de 23 = **3**
+D1 é o número de letras do primeiro nome, então D1 = 4. D2 é o último dígito do total (23), então D2 = 3.
 
 | Parâmetro | Fórmula | Conta | Valor |
 |---|---|---|---|
-| Instruções por amostra (IC) | 100.000 + 20.000 × D2 | 100.000 + 20.000 × 3 | **160.000** |
-| Taxa de falta na L1 (m) | 3% + 0,5% × D1 | 3% + 0,5% × 4 | **5% (0,05)** |
-| Tamanho do buffer (N) | 3 + (D2 mod 5) | 3 + (3 mod 5) = 3 + 3 | **6** |
+| Instruções por amostra (IC) | 100.000 + 20.000 × D2 | 100.000 + 20.000 × 3 | 160.000 |
+| Taxa de falta na L1 (m) | 3% + 0,5% × D1 | 3% + 0,5% × 4 | 5% |
+| Tamanho do buffer (N) | 3 + (D2 mod 5) | 3 + 3 | 6 |
 
-Requisito: **≤ 5 ms por amostra**, com período de amostragem de 10 ms.
+O requisito é processar cada amostra em no máximo 5 ms, e chega uma amostra nova a cada 10 ms.
 
 ---
 
-# Parte A — O problema técnico
+# Parte A: o problema técnico
 
-## A1. Arquitetura e memória: qual processador vai na pulseira?
+## A1. Qual processador vai na pulseira
 
-### A1.1 — Plataforma H (Harvard, 48 MHz, CPI 1,5, sem SO)
+### A1.1 Plataforma H
 
 ```
 Ciclos = IC × CPI = 160.000 × 1,5 = 240.000 ciclos
-Tempo  = Ciclos / f = 240.000 / (48 × 10⁶ Hz) = 0,005 s = 5,000 ms
+Tempo  = 240.000 / 48.000.000 Hz = 0,005 s = 5,000 ms
 ```
 
-**Atende, mas no limite exato: 5,000 ms ≤ 5 ms, com margem zero.**
+Dá exatamente 5 ms. Pelo enunciado ("no máximo 5 ms") ela atende, mas com margem zero. Na prática eu não confiaria nisso, porque qualquer coisa a mais (uma interrupção do BLE, uma mudança pequena no filtro numa versão futura) já faz passar do prazo. Além disso, o processador ficaria 50% do tempo ocupado só com o filtro (5 ms de cada 10 ms).
 
-Formalmente o requisito é "no máximo 5 ms", então a conta passa. Como engenharia, eu não aceitaria: qualquer coisa que some um único ciclo (uma interrupção do BLE, um IC um pouco maior numa versão futura do filtro, variação de clock por temperatura) estoura o prazo. A pulseira também ficaria com 50% de ocupação da CPU (5 ms de 10 ms) só no filtro. Margem zero num requisito de segurança não é margem.
+### A1.2 Plataforma V
 
-### A1.2 — Plataforma V (Von Neumann, 1,2 GHz, cache L1, Linux)
-
-**AMAT** (tempo médio de acesso à memória):
+Tempo médio de acesso à memória:
 
 ```
-AMAT = tempo de acerto + m × penalidade de falta
+AMAT = acerto + m × penalidade
      = 1 + 0,05 × 120
-     = 1 + 6 = 7 ciclos
+     = 7 ciclos
 ```
 
-**CPI efetivo** (fórmula do enunciado):
+CPI efetivo, usando a fórmula do enunciado:
 
 ```
-CPI_ef = 1,0 + (acessos/instrução × m × penalidade)
-       = 1,0 + (1,3 × 0,05 × 120)
-       = 1,0 + 7,8 = 8,8
+CPI_ef = 1,0 + (1,3 × 0,05 × 120)
+       = 1,0 + 7,8
+       = 8,8
 ```
 
-Ou seja, 89% do CPI (7,8 de 8,8) são paradas esperando a memória.
+Ou seja, de 8,8 ciclos por instrução, 7,8 são o processador parado esperando a memória.
 
-**Tempo médio por amostra:**
+Tempo médio por amostra:
 
 ```
 Ciclos = 160.000 × 8,8 = 1.408.000 ciclos
-Tempo  = 1.408.000 / (1,2 × 10⁹ Hz) = 1,173 ms
+Tempo  = 1.408.000 / 1.200.000.000 Hz = 1,173 ms
 ```
 
-**Pior caso** (somando o atraso do SO):
+Pior caso, somando o atraso do Linux:
 
 ```
-T_pior = 1,173 + 3,000 = 4,173 ms
+1,173 + 3 = 4,173 ms
 ```
 
-**Atende: 4,173 ms ≤ 5 ms**, com folga de 0,827 ms (≈ 17%).
+A V atende, com uma folga de 0,827 ms (uns 17%).
 
-Duas ressalvas que importam para a decisão:
-
-1. **O sistema operacional domina o pior caso:** 3 ms dos 4,173 ms (72%) são o Linux, não o processamento. O processador é rápido; quem ameaça o prazo é o não-determinismo.
-2. **O 1,173 ms é tempo médio, mas o requisito é sobre toda amostra.** Se a taxa de falta piorar (outro processo poluindo a cache, por exemplo o BLE), o prazo cai. Taxa máxima de falta que a V tolera:
+Duas observações que eu acho importantes aqui. Primeiro, dos 4,173 ms do pior caso, 3 ms são do sistema operacional. O processador em si é rápido; o que coloca o prazo em risco é o Linux. Segundo, o 1,173 ms é um tempo médio, e o requisito vale para toda amostra. Se a taxa de falta subir (por exemplo, o processo do BLE disputando a cache), o tempo sobe junto. Calculei até onde ela aguenta:
 
 ```
-Tempo disponível para processar = 5 − 3 = 2 ms
-CPI_max = 2 × 10⁻³ × 1,2 × 10⁹ / 160.000 = 15
-1 + 1,3 × m_max × 120 ≤ 15  →  m_max = 14 / 156 ≈ 8,97%
+Sobram 5 - 3 = 2 ms para processar
+CPI máximo = 0,002 × 1.200.000.000 / 160.000 = 15
+1 + 1,3 × m × 120 ≤ 15  →  m ≤ 14 / 156 ≈ 8,97%
 ```
 
-Com m = 5% estamos bem, mas **acima de ~9% de falta na L1, a V deixa de atender.**
+Então, com a taxa de falta acima de uns 9%, a V deixa de cumprir o prazo. Com os meus 5% está tudo bem, mas a margem não é tão grande quanto parece.
 
-### A1.3 — Plataforma H com acelerador DSP (Lei de Amdahl)
+### A1.3 Plataforma H com DSP (Lei de Amdahl)
 
-Fração acelerável: f = 0,6 (filtro). Ganho na fração: k = 5.
+O filtro é 60% do tempo (f = 0,6) e o DSP deixa ele 5 vezes mais rápido (k = 5):
 
 ```
-Speedup = 1 / [(1 − f) + f / k]
+Speedup = 1 / [(1 - f) + f / k]
         = 1 / [0,4 + 0,6 / 5]
-        = 1 / [0,4 + 0,12]
-        = 1 / 0,52 ≈ 1,923×
+        = 1 / 0,52
+        ≈ 1,923
 
-Novo tempo = 5,000 ms / 1,923 = 5,000 × 0,52 = 2,600 ms
+Novo tempo = 5,000 / 1,923 = 2,6 ms
 ```
 
-Conferindo por partes: fora do filtro 0,4 × 5 = 2,0 ms; filtro 0,6 × 5 / 5 = 0,6 ms; total 2,6 ms. ✓
+Conferindo por partes: a parte que não é filtro continua levando 0,4 × 5 = 2,0 ms, e o filtro passa a levar 0,6 × 5 / 5 = 0,6 ms. Total de 2,6 ms, então bate.
 
-**Atende com folga: 2,6 ms, margem de 2,4 ms (48%)** e ocupação de CPU cai de 50% para 26%.
+Agora atende com folga: sobram 2,4 ms (48%), e a ocupação do processador cai de 50% para 26%.
 
-Observação de Amdahl: mesmo com um DSP infinitamente rápido, o speedup máximo seria 1 / 0,4 = **2,5×** (tempo mínimo de 2,0 ms). Daqui para frente, otimizar o filtro rende pouco; o gargalo passa a ser os 40% restantes.
+Um detalhe da Lei de Amdahl: mesmo que o DSP fosse infinitamente rápido, o speedup máximo seria 1 / 0,4 = 2,5, ou seja, nunca daria menos que 2 ms. A partir daqui, melhorar o filtro rende pouco, porque o que pesa são os outros 40%.
 
-**Resumo da A1:**
+Resumo da A1:
 
-| Opção | Tempo por amostra (pior caso) | Margem até 5 ms | Determinístico? |
+| Opção | Pior caso | Folga até 5 ms | Tempo sempre igual? |
 |---|---|---|---|
 | H | 5,000 ms | 0 ms (0%) | Sim |
-| V | 4,173 ms | 0,827 ms (17%) | Não (cache + SO) |
+| V | 4,173 ms | 0,827 ms (17%) | Não (depende da cache e do Linux) |
 | H + DSP | 2,600 ms | 2,400 ms (48%) | Sim |
 
-### A1.4 — Por que a V precisa de cache e a H não? (gargalo de Von Neumann)
+### A1.4 Por que a V precisa de cache e a H não
 
-Na V, instruções e dados passam pelo **mesmo barramento** até uma DRAM de 120 ciclos: o gargalo de Von Neumann. Sem cache, cada instrução esperaria 1,3 × 120 ciclos: CPI ≈ 1 + 156 = 157, ou seja **160.000 × 157 / 1,2 GHz ≈ 20,9 ms por amostra**, 4× acima do prazo, apesar do clock 25× maior. A cache esconde essa latência. Na H, instruções e dados têm **barramentos separados** para uma SRAM interna de 1 ciclo, e o clock de 48 MHz é baixo o suficiente para a memória acompanhar a CPU: não existe distância a esconder.
+Na V, instruções e dados usam o mesmo caminho até uma DRAM que demora 120 ciclos, que é justamente o gargalo de Von Neumann. Sem cache, cada instrução esperaria 1,3 × 120 ciclos, o CPI iria para uns 157 e cada amostra levaria cerca de 160.000 × 157 / 1,2 GHz ≈ 20,9 ms, quatro vezes acima do prazo mesmo com um clock 25 vezes maior. A H tem caminhos separados para instruções e dados, numa SRAM de 1 ciclo, e o clock de 48 MHz é lento o bastante para a memória acompanhar, então não tem atraso para esconder.
 
-### A1.5 — Evidência da minha máquina
+### A1.5 Caches do meu computador
 
 ![Caches do meu computador](img/caches.png)
 
-> ⚠️ **ANNE:** tirar o print no seu computador e salvar como `img/caches.png`.
-> macOS: `sysctl -a | grep cachesize` · Linux: `lscpu` · Windows: aba *Caches* do CPU-Z.
-> Depois, preencher os valores abaixo com os do print.
+PREENCHER: tirar o print, salvar como img/caches.png e completar os valores abaixo.
 
-Meu processador tem **L1 de instruções (L1i: ___ KB) separada da L1 de dados (L1d: ___ KB)**, e as camadas seguintes (L2 de ___ e L3 de ___, quando existe) são unificadas.
+O meu processador tem a L1 dividida em L1 de instruções (___ KB) e L1 de dados (___ KB). A L2 (___) e a L3 (___) são unificadas.
 
-Então ele é **Harvard modificado**: no nível do núcleo é Harvard, porque busca instrução e lê dado no mesmo ciclo por caminhos separados (evita o conflito estrutural que existiria no estágio IF × MEM do pipeline da A2). Mas a partir da L2 e na RAM, instruções e dados moram na mesma memória e no mesmo espaço de endereçamento: para o programador e para o sistema operacional, o modelo é **Von Neumann** (é isso que permite carregar um programa do disco como dado e depois executá-lo). Ou seja, a L1 dividida é uma solução Harvard aplicada exatamente onde o gargalo de Von Neumann dói mais.
+Então ele é Harvard modificado. Dentro do núcleo ele funciona como Harvard, porque consegue buscar uma instrução e ler um dado no mesmo ciclo por caminhos separados (o que evita o conflito entre os estágios IF e MEM do pipeline da A2). Mas da L2 para baixo, e na RAM, instruções e dados ficam na mesma memória e no mesmo espaço de endereçamento, então para o sistema operacional e para quem programa ele é Von Neumann. É isso que permite, por exemplo, carregar um programa do disco como se fosse dado e depois executar. A L1 separada acaba sendo uma ideia de Harvard usada exatamente no ponto onde o gargalo de Von Neumann mais atrapalharia.
 
 ---
 
-## A2. Pipeline: o loop do filtro
+## A2. Pipeline do filtro
 
 ```asm
 1  lw   x5, 0(x10)    # lê a amostra nova
@@ -147,230 +139,232 @@ Então ele é **Harvard modificado**: no nível do núcleo é Harvard, porque bu
 7  addi x11, x11, 4   # avança o ponteiro da antiga
 ```
 
-Pipeline de 5 estágios (IF, ID, EX, MEM, WB). Banco de registradores escrito na 1ª metade do ciclo e lido na 2ª: uma instrução pode ler no ID o valor que outra escreve no WB **no mesmo ciclo**.
+Considerando que o banco de registradores é escrito na primeira metade do ciclo e lido na segunda, uma instrução consegue ler no ID o valor que outra está escrevendo no WB no mesmo ciclo.
 
-### A2.1 — Dependências de dados (RAW)
+### A2.1 Dependências RAW
 
-| Produtora | Consumidora | Registrador | Tipo |
+| Produz | Usa | Registrador | Observação |
 |---|---|---|---|
-| 1 `lw` | 2 `add` | x5 | load → uso (adjacente) |
-| 2 `add` | 4 `sub` | x6 | ALU → ALU (distância 2) |
-| 3 `lw` | 4 `sub` | x7 | load → uso (adjacente) |
-| 4 `sub` | 5 `sw` | x6 | ALU → store (adjacente) |
+| 1 (lw) | 2 (add) | x5 | load seguido de uso |
+| 2 (add) | 4 (sub) | x6 | distância de 2 instruções |
+| 3 (lw) | 4 (sub) | x7 | load seguido de uso |
+| 4 (sub) | 5 (sw) | x6 | instruções vizinhas |
 
-Não são RAW, mas restringem a reordenação (A2.4): **WAR** em x10 (1 lê, 6 escreve) e em x11 (3 lê, 7 escreve), e **WAW** em x6 (2 e 4 escrevem). Num pipeline em ordem eles não geram bolha, mas não posso colocar o `addi x10` antes do `lw x5`, por exemplo.
+Também existem dependências que não são RAW mas que limitam a reordenação na A2.4: WAR em x10 (1 lê, 6 escreve), WAR em x11 (3 lê, 7 escreve) e WAW em x6 (2 e 4 escrevem). Elas não geram bolha num pipeline em ordem, mas eu não posso, por exemplo, colocar o addi x10 antes do lw x5.
 
-### A2.2 — Sem forwarding
+### A2.2 Sem forwarding
 
-Regra: a consumidora só pode fazer ID no ciclo do WB da produtora (ou depois).
-Legenda: **s** = stall (instrução retida no estágio; uma bolha segue no pipeline).
+A instrução que depende só pode fazer o ID no mesmo ciclo do WB da instrução da qual ela depende (ou depois). Na tabela, "s" é um ciclo de stall: a instrução fica parada no estágio e uma bolha segue pelo pipeline.
 
 | Instrução | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 `lw x5` | IF | ID | EX | MEM | WB | | | | | | | | | | | | |
-| 2 `add x6` | | IF | s | s | ID | EX | MEM | WB | | | | | | | | | |
-| 3 `lw x7` | | | IF | s | s | ID | EX | MEM | WB | | | | | | | | |
-| 4 `sub x6` | | | | | | IF | s | s | ID | EX | MEM | WB | | | | | |
-| 5 `sw x6` | | | | | | | IF | s | s | s | s | ID | EX | MEM | WB | | |
-| 6 `addi x10` | | | | | | | | | | IF | s | s | ID | EX | MEM | WB | |
-| 7 `addi x11` | | | | | | | | | | | | | IF | ID | EX | MEM | WB |
+| 1 lw x5 | IF | ID | EX | MEM | WB | | | | | | | | | | | | |
+| 2 add x6 | | IF | s | s | ID | EX | MEM | WB | | | | | | | | | |
+| 3 lw x7 | | | IF | s | s | ID | EX | MEM | WB | | | | | | | | |
+| 4 sub x6 | | | | | | IF | s | s | ID | EX | MEM | WB | | | | | |
+| 5 sw x6 | | | | | | | IF | s | s | s | s | ID | EX | MEM | WB | | |
+| 6 addi x10 | | | | | | | | | | IF | s | s | ID | EX | MEM | WB | |
+| 7 addi x11 | | | | | | | | | | | | | IF | ID | EX | MEM | WB |
 
-- 2 espera o WB de 1 (ciclo 5): **2 bolhas**
-- 4 espera o WB de 3 (ciclo 9; o x6 de 2 já foi escrito no ciclo 8): **2 bolhas**
-- 5 espera o WB de 4 (ciclo 12): **2 bolhas**
+- a 2 espera o WB da 1 (ciclo 5): 2 bolhas
+- a 4 espera o WB da 3 (ciclo 9); o x6 da 2 já foi escrito no ciclo 8: 2 bolhas
+- a 5 espera o WB da 4 (ciclo 12): 2 bolhas
 
-**Total: 17 ciclos** do primeiro IF ao último WB (11 do ideal + 6 bolhas).
-Ideal sem conflitos: 5 + (7 − 1) = 11 ciclos. CPI do trecho: 17 / 7 ≈ 2,43.
+Total de 17 ciclos do primeiro IF ao último WB. Sem nenhum conflito seriam 5 + (7 - 1) = 11 ciclos, então são 6 bolhas. O CPI do trecho fica 17 / 7 ≈ 2,43.
 
-### A2.3 — Com forwarding (EX/MEM→EX e MEM/WB→EX)
+### A2.3 Com forwarding
 
 | Instrução | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 `lw x5` | IF | ID | EX | MEM | WB | | | | | | | | |
-| 2 `add x6` | | IF | ID | s | EX | MEM | WB | | | | | | |
-| 3 `lw x7` | | | IF | s | ID | EX | MEM | WB | | | | | |
-| 4 `sub x6` | | | | | IF | ID | s | EX | MEM | WB | | | |
-| 5 `sw x6` | | | | | | IF | s | ID | EX | MEM | WB | | |
-| 6 `addi x10` | | | | | | | | IF | ID | EX | MEM | WB | |
-| 7 `addi x11` | | | | | | | | | IF | ID | EX | MEM | WB |
+| 1 lw x5 | IF | ID | EX | MEM | WB | | | | | | | | |
+| 2 add x6 | | IF | ID | s | EX | MEM | WB | | | | | | |
+| 3 lw x7 | | | IF | s | ID | EX | MEM | WB | | | | | |
+| 4 sub x6 | | | | | IF | ID | s | EX | MEM | WB | | | |
+| 5 sw x6 | | | | | | IF | s | ID | EX | MEM | WB | | |
+| 6 addi x10 | | | | | | | | IF | ID | EX | MEM | WB | |
+| 7 addi x11 | | | | | | | | | IF | ID | EX | MEM | WB |
 
-Caminhos de forwarding usados:
-- ciclo 5: x5 de 1 (saída da MEM, registrador MEM/WB) → EX de 2
-- ciclo 8: x7 de 3 (MEM/WB) → EX de 4; x6 de 2 já está no banco (escrito no ciclo 7)
-- ciclo 9: x6 de 4 (resultado da ALU, registrador EX/MEM) → EX de 5
+Forwardings usados:
+- ciclo 5: x5 da 1, que sai da MEM (registrador MEM/WB), vai para o EX da 2
+- ciclo 8: x7 da 3 (MEM/WB) vai para o EX da 4; o x6 da 2 já está no banco desde o ciclo 7
+- ciclo 9: x6 da 4, que sai da ALU (registrador EX/MEM), vai para o EX da 5
 
-**Total: 13 ciclos** (11 + 2 bolhas). CPI do trecho: 13 / 7 ≈ 1,86.
+Total de 13 ciclos, com 2 bolhas. CPI de 13 / 7 ≈ 1,86.
 
-**Quais dependências ainda causam bolha: as duas load → uso (1→2 por x5 e 3→4 por x7).** O motivo é temporal, não de fiação: o `lw` só tem o dado da memória **no fim do estágio MEM**, e a instrução seguinte precisa dele **no começo do EX**, que acontece no mesmo ciclo. Forwarding só leva um valor para frente no tempo; não consegue entregar um dado que ainda não existe. Então o hardware precisa segurar a instrução dependente por 1 ciclo (*load-use hazard*). As dependências ALU → ALU e ALU → store somem com forwarding porque o resultado sai no fim do EX, a tempo do próximo EX.
+As dependências que continuam dando bolha são as duas de load seguido de uso: 1 para 2 (x5) e 3 para 4 (x7). O motivo é de tempo. O lw só tem o dado lido da memória no final do estágio MEM, e a instrução seguinte precisa dele no começo do EX, que acontece nesse mesmo ciclo. O forwarding consegue adiantar um valor que já existe, mas não consegue entregar um valor que ainda não foi lido, então o hardware tem que segurar a instrução seguinte por 1 ciclo. Já as dependências entre instruções de ALU somem, porque o resultado da ALU fica pronto no fim do EX, a tempo do EX seguinte.
 
-### A2.4 — Reordenação sem bolhas
+### A2.4 Reordenando para tirar as bolhas
 
-Basta trocar as instruções 2 e 3: o segundo `lw` preenche o atraso do primeiro.
+Basta trocar a 2 com a 3. Assim o segundo lw ocupa o ciclo em que antes a add ficava esperando:
 
 ```asm
 1  lw   x5, 0(x10)    # lê a amostra nova
-3  lw   x7, 0(x11)    # lê a amostra mais antiga   ← subiu
-2  add  x6, x6, x5    # soma += nova               (x5 a 2 instruções do lw: OK)
-4  sub  x6, x6, x7    # soma -= antiga             (x7 a 2 instruções do lw: OK)
-5  sw   x6, 0(x12)    # grava a soma               (x6 por EX/MEM→EX)
+3  lw   x7, 0(x11)    # lê a amostra mais antiga (subiu)
+2  add  x6, x6, x5    # x5 agora está a 2 instruções do lw
+4  sub  x6, x6, x7    # x7 agora está a 2 instruções do lw
+5  sw   x6, 0(x12)    # x6 vem por EX/MEM -> EX
 6  addi x10, x10, 4
 7  addi x11, x11, 4
 ```
 
 | Instrução | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `lw x5` | IF | ID | EX | MEM | WB | | | | | | |
-| `lw x7` | | IF | ID | EX | MEM | WB | | | | | |
-| `add x6` | | | IF | ID | EX | MEM | WB | | | | |
-| `sub x6` | | | | IF | ID | EX | MEM | WB | | | |
-| `sw x6` | | | | | IF | ID | EX | MEM | WB | | |
-| `addi x10` | | | | | | IF | ID | EX | MEM | WB | |
-| `addi x11` | | | | | | | IF | ID | EX | MEM | WB |
+| lw x5 | IF | ID | EX | MEM | WB | | | | | | |
+| lw x7 | | IF | ID | EX | MEM | WB | | | | | |
+| add x6 | | | IF | ID | EX | MEM | WB | | | | |
+| sub x6 | | | | IF | ID | EX | MEM | WB | | | |
+| sw x6 | | | | | IF | ID | EX | MEM | WB | | |
+| addi x10 | | | | | | IF | ID | EX | MEM | WB | |
+| addi x11 | | | | | | | IF | ID | EX | MEM | WB |
 
-Forwarding: x5 MEM/WB→EX no ciclo 5; x7 MEM/WB→EX e x6 EX/MEM→EX no ciclo 6; x6 EX/MEM→EX no ciclo 7.
+Forwardings: x5 por MEM/WB no ciclo 5; x7 por MEM/WB e x6 por EX/MEM no ciclo 6; x6 por EX/MEM no ciclo 7.
 
-**Novo total: 11 ciclos, zero bolhas** (CPI = 11/7 ≈ 1,57, o mínimo para 7 instruções num pipeline de 5 estágios; ganho de 15% sobre os 13 ciclos).
+Total de 11 ciclos, sem nenhuma bolha, que é o mínimo possível para 7 instruções num pipeline de 5 estágios (CPI ≈ 1,57). Comparado com os 13 ciclos da A2.3, são 15% a menos.
 
-**Por que o resultado não muda:** as duas cargas leem endereços diferentes (x10 e x11) e nada entre elas escreve memória; `soma + nova − antiga` continua sendo calculado na mesma ordem; o `sw` continua depois do `sub`; e os `addi` continuam depois dos `lw` que leem x10/x11 (respeitando os WAR).
+O resultado não muda porque os dois lw leem endereços diferentes e nada entre eles escreve na memória, a conta continua sendo soma + nova - antiga, o sw continua depois do sub, e os addi continuam depois dos lw que usam x10 e x11.
 
 ---
 
-## A3. Processos e threads: como organizar o software
+## A3. Processos e threads
 
-### A3.1 — Organização proposta
+### A3.1 Organização
 
 ```
-┌──────── Processo 1: "tato-rt" (tempo real, SCHED_FIFO, prioridade alta) ────────┐
-│  thread_sensor ──► buffer circular ──► thread_processa ──► thread_motor           │
-│                        (memória compartilhada, semáforos da A4)                    │
-└───────────────────────────────┬──────────────────────────────────────────────────┘
-                                │  IPC: fila de mensagens POSIX (não bloqueante)
-                                │  log ─►            ◄─ comandos de configuração
-┌───────────────────────────────┴──────────────────────────────────────────────────┐
-│  Processo 2: "tato-ble" (prioridade normal, usuário sem privilégios, sandbox)     │
-└──────────────────────────────────────────────────────────────────────────────────┘
++------ Processo 1: "tato-rt" (tempo real, SCHED_FIFO, prioridade alta) ------+
+|  thread_sensor --> buffer circular --> thread_processa --> thread_motor      |
+|               (memória compartilhada, semáforos da A4)                       |
++---------------------------------+-------------------------------------------+
+                                  |  fila de mensagens POSIX (não bloqueante)
+                                  |  log -->          <-- comandos de config
++---------------------------------+-------------------------------------------+
+|  Processo 2: "tato-ble" (prioridade normal, usuário sem privilégios)        |
++-----------------------------------------------------------------------------+
 ```
 
-**Sensor, processamento e motor: threads do mesmo processo.**
-- **Compartilhamento de memória:** as três formam a cadeia crítica de 5 ms e trocam uma amostra a cada 10 ms. Como threads, passam um ponteiro para o mesmo buffer, sem cópia e sem chamada de sistema de IPC.
-- **Custo de troca de contexto:** trocar entre threads do mesmo processo não troca o espaço de endereçamento (não recarrega a tabela de páginas, não invalida a TLB, a cache continua "quente"). Na V, onde 89% do CPI já é espera de memória (A1.2), sujar a cache a cada troca seria caro.
-- **Custo de criação:** são criadas uma vez no boot, mas threads ainda são mais baratas (não duplicam espaço de endereçamento).
-- **Isolamento:** aqui eu aceito *não* ter isolamento, porque as três são código nosso, pequeno, auditável, e sem entrada externa. Se uma falhar, a pulseira já perdeu a função de qualquer forma.
+Sensor, processamento e motor ficam como threads de um mesmo processo:
+- Compartilhamento de memória: são as três tarefas do caminho de 5 ms e trocam uma amostra a cada 10 ms. Sendo threads, elas usam o mesmo buffer direto, sem copiar dados e sem chamada de sistema.
+- Troca de contexto: trocar entre threads do mesmo processo não troca o espaço de endereçamento, então não precisa recarregar a tabela de páginas nem limpar a TLB, e a cache continua com os dados úteis. Como na V quase todo o CPI já é espera de memória (A1.2), sujar a cache a cada troca sairia caro.
+- Criação: elas são criadas uma vez só, no boot, mas mesmo assim threads são mais baratas de criar do que processos.
+- Isolamento: aqui eu aceito não ter isolamento entre elas, porque é código nosso, pequeno, e nenhuma delas recebe dados de fora. Se uma delas falhar, a pulseira já perdeu a função principal de qualquer jeito.
 
-**BLE: processo separado.**
-- **Isolamento de falhas:** é a única tarefa que recebe dados de fora e tem a pilha mais complexa. Se travar ou der *segfault*, só ele morre; o processo de tempo real continua vibrando, e o supervisor (systemd) o reinicia.
-- **Não está no caminho crítico:** o log pode chegar com 100 ms de atraso que ninguém se machuca. O custo extra do processo (cópia pela IPC, troca de contexto com troca de espaço de endereçamento, da ordem de microssegundos) cai inteiro numa tarefa sem prazo apertado.
-- **Comunicação desacoplada:** o lado de tempo real só faz *envio não bloqueante* do log; se a fila do BLE estiver cheia, o log é descartado e a vibração não espera. Comandos de configuração chegam pela fila e são validados antes de aplicar.
+O BLE fica num processo separado:
+- Isolamento de falhas: é a única parte que recebe dados de fora e é a pilha mais complexa. Se travar ou der segfault, só ele cai; o processo principal continua vibrando e o systemd reinicia o BLE.
+- Não está no caminho crítico: se o log chegar 100 ms atrasado no celular, ninguém se machuca. Então o custo extra de ser processo (cópia na comunicação, troca de contexto mais cara, na casa dos microssegundos) fica todo numa tarefa sem prazo apertado.
+- Comunicação: o processo principal só envia o log de forma não bloqueante. Se a fila estiver cheia, o log é descartado, e a vibração nunca fica esperando o BLE. Os comandos de configuração chegam pela fila e são validados antes de serem aplicados.
 
-### A3.2 — BLE explorado: thread × processo
+### A3.2 Se alguém explorar uma falha no BLE
 
-| | BLE como **thread** | BLE como **processo separado** |
+| | BLE como thread | BLE como processo separado |
 |---|---|---|
-| O que o atacante alcança | Todo o espaço de endereçamento: buffer de amostras, estado do motor, código, dados | Só a memória do próprio processo BLE (a MMU impede o resto) |
-| Pior cenário para o usuário | **Desligar a vibração em silêncio** ou injetar amostras falsas: a pessoa anda achando que o caminho está livre | Mandar comandos de configuração pela fila de IPC, que são validados |
-| Se o exploit derrubar o código | O processo inteiro morre: sensor e motor juntos | Só o BLE cai; a vibração continua |
-| Privilégios | Os mesmos do processo de tempo real (acesso a I2C, motor, prioridade RT) | Usuário sem privilégios, sem acesso a `/dev/i2c` nem ao GPIO do motor, com seccomp |
+| O que o atacante consegue acessar | Toda a memória do processo: buffer de amostras, controle do motor, código | Só a memória do processo do BLE, porque a MMU separa os espaços de endereçamento |
+| Pior caso para quem usa | Desligar a vibração sem a pessoa perceber, ou injetar amostras falsas, e ela andar achando que o caminho está livre | Mandar comandos pela fila, que passam por validação |
+| Se o ataque derrubar o código | O processo inteiro morre, sensor e motor juntos | Só o BLE cai, a vibração continua |
+| Permissões | As mesmas do processo de tempo real (I2C, motor, prioridade alta) | Usuário sem privilégios, sem acesso ao I2C nem ao motor |
 
-Como processo separado, a **superfície de ataque** deixa de ser "toda a memória do sistema" e passa a ser "o formato das mensagens da fila". Não é segurança absoluta (uma falha no kernel ou um comando *válido* malicioso ainda são riscos), por isso a validação no processo de tempo real deve garantir invariantes de segurança: nenhum comando pode desligar a vibração ou levar a sensibilidade abaixo de um mínimo seguro.
+Com processo separado, o que o atacante consegue atingir deixa de ser a memória inteira e passa a ser só o formato das mensagens da fila. Isso não resolve tudo (ainda existe risco de falha no kernel, ou de um comando válido mas malicioso), então a validação no processo principal precisa garantir que nenhum comando consiga desligar a vibração ou baixar a sensibilidade abaixo de um mínimo seguro.
 
-### A3.3 — Diagrama de estados de um processo
+### A3.3 Diagrama de estados
 
 ```mermaid
 stateDiagram-v2
     [*] --> Novo
     Novo --> Pronto: admitido
-    Pronto --> Executando: escalonador despacha
+    Pronto --> Executando: escalonador escolhe
     Executando --> Pronto: preempção / fim do quantum
-    Executando --> Bloqueado: espera E/S ou evento\n(timer de 10 ms, I2C, sem_wait)
-    Bloqueado --> Pronto: E/S concluída / evento ocorre
+    Executando --> Bloqueado: espera E/S ou evento (timer, I2C, sem_wait)
+    Bloqueado --> Pronto: E/S terminou / evento aconteceu
     Executando --> Terminado: exit
     Terminado --> [*]
 ```
 
-**A thread do sensor passa a maior parte do tempo em Bloqueado.** Ela trabalha uma vez a cada 10 ms: acorda pelo timer, dispara a leitura no I2C (e bloqueia de novo até a transferência terminar), entrega a amostra no buffer e volta a dormir até o próximo período (`clock_nanosleep`). Se a leitura levar ~100 µs, ela fica bloqueada ~99% do tempo. É uma tarefa *I/O-bound* clássica: o ritmo é ditado pelo mundo físico, não pela CPU.
+A thread do sensor fica a maior parte do tempo no estado Bloqueado. Ela só trabalha uma vez a cada 10 ms: acorda pelo timer, pede a leitura no I2C (e bloqueia de novo até a leitura terminar), coloca a amostra no buffer e volta a dormir até o próximo período. Se a leitura levar uns 100 µs, ela passa cerca de 99% do tempo bloqueada. É uma tarefa limitada por E/S, quem dita o ritmo dela é o sensor e não a CPU.
 
-Isso só vale porque ela **bloqueia** em vez de fazer espera ocupada. Na versão 1 da A4 (busy waiting), as threads ficariam alternando entre Executando e Pronto, gastando CPU e bateria e competindo com a thread de processamento, justamente a que tem o prazo de 5 ms.
+Isso só acontece porque ela bloqueia em vez de ficar em espera ocupada. Na versão 1 da A4, com busy waiting, as threads ficariam alternando entre Executando e Pronto, gastando CPU e bateria e competindo com a thread de processamento, que é justamente a que tem o prazo de 5 ms.
 
 ---
 
-## A4. Código com semáforos: buffer entre o sensor e o motor
+## A4. Buffer entre o sensor e o motor (semáforos)
 
-Código em [`/ponderada/codigo`](codigo/) (Python 3, `threading`). Cada script roda as 3 execuções de 20.000 amostras e imprime a tabela. N = 6.
+O código está em [codigo/](codigo/), em Python 3 com threading. Cada script roda as 3 execuções com 20.000 amostras e já imprime a tabela. N = 6.
 
 ### Resultados
 
-| Versão | Exec | Consumidas | Perdidas | Duplicadas | Travou? |
+| Versão | Execução | Consumidas | Perdidas | Duplicadas | Travou? |
 |---|---|---|---|---|---|
-| 1 — sem sincronização | 1 | 20.074 | 2.495 | 2.569 | Não |
-| 1 — sem sincronização | 2 | 20.064 | 2.539 | 2.603 | Não |
-| 1 — sem sincronização | 3 | 20.612 | 2.521 | 3.133 | Não |
-| 2 — semáforos | 1 | 20.000 | 0 | 0 | Não |
-| 2 — semáforos | 2 | 20.000 | 0 | 0 | Não |
-| 2 — semáforos | 3 | 20.000 | 0 | 0 | Não |
-| 3 — ordem trocada | 1 | 0 | 20.000* | 0 | **Sim** |
-| 3 — ordem trocada | 2 | 0 | 20.000* | 0 | **Sim** |
-| 3 — ordem trocada | 3 | 0 | 20.000* | 0 | **Sim** |
+| 1 (sem sincronização) | 1 | 20.074 | 2.495 | 2.569 | Não |
+| 1 (sem sincronização) | 2 | 20.064 | 2.539 | 2.603 | Não |
+| 1 (sem sincronização) | 3 | 20.612 | 2.521 | 3.133 | Não |
+| 2 (semáforos) | 1 | 20.000 | 0 | 0 | Não |
+| 2 (semáforos) | 2 | 20.000 | 0 | 0 | Não |
+| 2 (semáforos) | 3 | 20.000 | 0 | 0 | Não |
+| 3 (ordem trocada) | 1 | 0 | 20.000* | 0 | Sim |
+| 3 (ordem trocada) | 2 | 0 | 20.000* | 0 | Sim |
+| 3 (ordem trocada) | 3 | 0 | 20.000* | 0 | Sim |
 
-\* Na versão 3, 6 amostras (0 a 5) ficaram presas no buffer e as outras 19.994 nunca chegaram a ser produzidas: nenhuma chegou ao motor.
+\* Na versão 3, as amostras 0 a 5 ficaram presas no buffer e as outras 19.994 nem chegaram a ser produzidas. Nenhuma chegou ao motor.
 
-**Checagem de consistência da versão 1:** consumidas = 20.000 − perdidas + duplicadas, em todas as execuções (20.000 − 2.495 + 2.569 = 20.074 ✓; 20.000 − 2.539 + 2.603 = 20.064 ✓; 20.000 − 2.521 + 3.133 = 20.612 ✓). Os erros não são ruído de medição, são exatamente o efeito do contador corrompido.
+Para conferir se os números da versão 1 fazem sentido: consumidas = 20.000 - perdidas + duplicadas. Execução 1: 20.000 - 2.495 + 2.569 = 20.074. Execução 2: 20.000 - 2.539 + 2.603 = 20.064. Execução 3: 20.000 - 2.521 + 3.133 = 20.612. Bate nas três, então os erros são mesmo efeito do contador corrompido, e não erro na contagem.
 
 ### Prints
 
-**Versão 1:**
+Versão 1:
+
 ![Execução da versão 1](img/execucao-v1.png)
 
-**Versão 2:**
+Versão 2:
+
 ![Execução da versão 2](img/execucao-v2.png)
 
-**Versão 3:**
+Versão 3:
+
 ![Execução da versão 3](img/execucao-v3.png)
 
-### Região crítica da versão 1 e por que ela perde ou duplica
+### Região crítica da versão 1
 
-A região crítica é o **read-modify-write do contador compartilhado** (junto com o acesso à posição do buffer que ele autoriza):
+A região crítica é a leitura e escrita do contador compartilhado (junto com o acesso à posição do buffer que esse contador libera):
 
 ```python
 lido = estado["contador"]      # lê
-time.sleep(0)                  # ← a thread pode perder a CPU aqui
-estado["contador"] = lido + 1  # escreve (produtor) / lido - 1 (consumidor)
+time.sleep(0)                  # a thread pode perder a CPU aqui
+estado["contador"] = lido + 1  # escreve (no consumidor é lido - 1)
 ```
 
-`contador += 1` parece uma operação, mas são três (ler, somar, escrever). Se a outra thread escreve no meio, uma das escritas se perde (*lost update*). O GIL do Python não protege isso: ele garante bytecodes atômicos, não sequências de bytecodes; o `sleep(0)` força a troca exatamente no pior ponto.
+contador += 1 parece uma operação só, mas na verdade são três: ler, somar e escrever. Se a outra thread escreve no meio, uma das duas escritas se perde. O GIL do Python não protege isso, porque ele garante que cada bytecode é atômico, mas não uma sequência de bytecodes. O sleep(0) força a troca de thread exatamente nesse ponto.
 
-- **Duplicação:** produtor lê contador = 3 e é interrompido; consumidor retira uma amostra e grava 2; produtor volta e grava 3 + 1 = **4**. Há só 3 amostras reais, mas o contador diz 4. O consumidor vai ler uma posição já consumida: **amostra duplicada**.
-- **Perda:** o inverso. Consumidor lê 3 e é interrompido; produtor insere e grava 4; consumidor volta e grava 3 − 1 = **2**. Há 3 amostras reais, mas o contador diz 2. O produtor acha que tem uma vaga a mais e **sobrescreve uma amostra que ainda não foi consumida: perdida**.
+Como aparece a duplicação: o produtor lê contador = 3 e é interrompido. O consumidor retira uma amostra e grava 2. O produtor volta e grava 3 + 1 = 4. Na verdade só existem 3 amostras no buffer, mas o contador diz 4, então o consumidor acaba lendo uma posição que já tinha lido antes.
 
-Os dois erros aparecem em quantidade parecida (≈ 2.500 de cada, ~12,5% das amostras), o que bate com a simetria da corrida.
+Como aparece a perda: é o contrário. O consumidor lê 3 e é interrompido. O produtor insere uma amostra e grava 4. O consumidor volta e grava 3 - 1 = 2. Existem 3 amostras, mas o contador diz 2, então o produtor acha que tem espaço sobrando e escreve por cima de uma amostra que ainda não tinha sido consumida.
 
-**Por que não travou:** com um produtor e um consumidor, o contador corrompido quase sempre é > 0 ou < N, então sempre alguém consegue andar. O modo de falha não foi o travamento, foi **corrupção silenciosa**, e isso é pior para a pessoa usando a pulseira: ela não percebe nada de errado. Uma amostra duplicada é uma vibração baseada numa leitura velha (o poste já está mais perto do que a pulseira diz); uma amostra perdida é um obstáculo que nunca vira vibração.
+Os dois erros apareceram em quantidade parecida (por volta de 2.500 cada, uns 12,5% das amostras), o que faz sentido, já que a corrida acontece dos dois lados.
+
+A versão 1 não travou em nenhuma das execuções. Com um produtor e um consumidor, o contador errado quase sempre fica entre 0 e N, então sempre alguma das threads consegue andar. O problema que apareceu foi outro: os dados ficaram errados sem nenhum aviso. Pensando na pulseira, isso é até pior do que travar, porque a pessoa não percebe. Uma amostra duplicada vira uma vibração baseada numa leitura velha (o poste já está mais perto do que a pulseira indica), e uma amostra perdida é um obstáculo que nunca vira vibração.
 
 ### O que cada semáforo garante na versão 2
 
-| Semáforo | Valor inicial | Quem faz `wait` | Garantia |
+| Semáforo | Começa em | Quem espera nele | O que garante |
 |---|---|---|---|
-| `vazio` | N = 6 | Produtor, antes de inserir | Conta vagas livres. O produtor **bloqueia com o buffer cheio**, então nunca sobrescreve uma amostra não consumida: **zero perdas** |
-| `cheio` | 0 | Consumidor, antes de retirar | Conta amostras disponíveis. O consumidor **bloqueia com o buffer vazio**, então nunca lê uma posição velha: **zero duplicações** |
-| `mutex` | 1 | Os dois, em volta do acesso ao buffer | **Exclusão mútua**: só uma thread por vez mexe no buffer, nos índices e no contador. Com 1 produtor e 1 consumidor ele protege o contador compartilhado; com vários produtores ou consumidores, também impede dois de usarem a mesma posição |
+| vazio | 6 (N) | Produtor, antes de inserir | Conta as posições livres. Com o buffer cheio o produtor dorme, então nunca escreve por cima de amostra não consumida. Por isso não houve perdas |
+| cheio | 0 | Consumidor, antes de retirar | Conta as amostras disponíveis. Com o buffer vazio o consumidor dorme, então nunca lê uma posição velha. Por isso não houve duplicadas |
+| mutex | 1 | Os dois, em volta do acesso ao buffer | Só uma thread mexe no buffer, nos índices e no contador por vez. Com um produtor e um consumidor ele protege o contador; se tivesse mais de um produtor ou consumidor, também impediria dois deles de usar a mesma posição |
 
-Evidências: 20.000 consumidas, 0 perdidas, 0 duplicadas, contador final 0 e **todas as amostras em ordem**, nas 3 execuções, mesmo com o mesmo `sleep(0)` dentro da região crítica. A interrupção continua acontecendo, mas não causa dano, porque ninguém mais consegue entrar. E não há espera ocupada: a thread sem trabalho vai para o estado Bloqueado (A3.3).
+Nas 3 execuções foram 20.000 consumidas, nenhuma perdida, nenhuma duplicada, o contador terminou em 0 e todas as amostras chegaram em ordem. Isso mesmo com o mesmo sleep(0) dentro da região crítica: a troca de thread continua acontecendo, mas não estraga nada, porque a outra thread não consegue entrar. E também não tem mais espera ocupada, a thread que não tem o que fazer vai para o estado Bloqueado (A3.3).
 
-O custo: a versão 2 levou ~3,0 s contra ~1,6 s da versão 1. É o preço da sincronização, e é o preço certo: a versão 1 é mais rápida porque está errada.
+A versão 2 levou uns 3,0 s contra 1,6 s da versão 1. Esse é o custo da sincronização. A versão 1 só é mais rápida porque está entregando dados errados.
 
-### O que aconteceu na versão 3, e por quê
+### O que aconteceu na versão 3
 
-**Deadlock nas 3 execuções, com 0 amostras entregues ao motor.** O diagnóstico do próprio programa mostra onde cada thread parou:
+Deu deadlock nas 3 execuções e nenhuma amostra chegou ao motor. O próprio programa mostra onde cada thread parou:
 
-- **produtor:** segurando o `mutex`, esperando `vazio` (na amostra 6)
-- **consumidor:** esperando o `mutex` (com o buffer cheio)
+- produtor: segurando o mutex e esperando vazio (na amostra 6)
+- consumidor: esperando o mutex, com o buffer cheio
 
-A sequência: o produtor faz `wait(mutex)` → `wait(vazio)` → insere → libera, e repete. Como ele readquire o mutex logo depois de soltar, encheu as 6 posições (amostras 0 a 5, `vazio` chegou a 0) antes do consumidor conseguir entrar. Na amostra 6 ele pegou o `mutex` e **dormiu em `vazio` sem soltar o `mutex`**. O consumidor tem 6 amostras para retirar (`cheio` = 6), mas precisa do `mutex` para isso, e quem o tem está dormindo esperando uma vaga que só o consumidor pode criar.
+O que aconteceu foi: o produtor faz wait(mutex), depois wait(vazio), insere e libera. Como ele pega o mutex de novo logo depois de soltar, conseguiu encher as 6 posições (amostras 0 a 5, vazio chegou a 0) antes do consumidor entrar. Na amostra 6 ele pegou o mutex e ficou dormindo em vazio sem soltar o mutex. O consumidor tinha 6 amostras para retirar (cheio = 6), mas precisava do mutex, e quem estava com o mutex estava esperando uma vaga que só o consumidor podia liberar.
 
-**Espera circular entre duas threads:** produtor → espera `vazio` → que só o consumidor libera → consumidor espera `mutex` → que o produtor segura. As quatro condições de Coffman aparecem (detalhadas na A5).
+É uma espera circular entre duas threads: o produtor espera o vazio, que só o consumidor libera, e o consumidor espera o mutex, que está com o produtor. As quatro condições para deadlock estão presentes (explico cada uma na A5).
 
-A lição: **a ordem dos `signal` não importa, mas a ordem dos `wait` importa.** Nunca se deve dormir esperando um recurso de contagem (`vazio`/`cheio`) segurando o `mutex`. Sem o timeout de 1 s que usei para detectar o travamento, o programa ficaria parado para sempre, exatamente o sintoma da A5: "a pulseira congelou e só voltou depois de desligar e ligar".
+O que eu tirei disso é que a ordem dos signal não importa, mas a ordem dos wait importa: nunca dá para esperar um semáforo de contagem (vazio ou cheio) segurando o mutex. Sem o timeout de 1 s que eu coloquei só para detectar o problema, o programa ficaria parado para sempre, que é exatamente o que o cliente relatou na A5.
 
-Um detalhe que eu acho importante: aqui o deadlock aparece **sempre e na hora**, porque o buffer enche em microssegundos. Isso é bom, um teste pega. O deadlock da A5 é o tipo perigoso: depende de uma intercalação rara e passa nos testes.
+Uma diferença em relação à A5: aqui o deadlock acontece sempre e logo no começo, porque o buffer enche em microssegundos. Isso até ajuda, porque qualquer teste pega. O da A5 é mais perigoso, porque depende de uma ordem de execução rara e passa nos testes.
 
 ---
 
@@ -386,18 +380,18 @@ V(log)                V(ble)             V(i2c)
 V(i2c)                V(log)             V(ble)
 ```
 
-### A5.1 — Sequência que leva ao deadlock e grafo de alocação
+### A5.1 Sequência que leva ao deadlock
 
-| Passo | Thread | Operação | Resultado |
+| Passo | Thread | Operação | O que acontece |
 |---|---|---|---|
-| 1 | sensor | `P(i2c)` | obtém i2c; executa `le_sensor()`; é preemptada |
-| 2 | log | `P(log)` | obtém log; executa `le_log()`; é preemptada |
-| 3 | config | `P(ble)` | obtém ble; executa `recebe_comando()` |
-| 4 | config | `P(i2c)` | **bloqueia** (i2c é do sensor) |
-| 5 | sensor | `P(log)` | **bloqueia** (log é da thread_log) |
-| 6 | log | `P(ble)` | **bloqueia** (ble é da config) |
+| 1 | sensor | P(i2c) | pega o i2c, executa le_sensor() e perde a CPU |
+| 2 | log | P(log) | pega o log, executa le_log() e perde a CPU |
+| 3 | config | P(ble) | pega o ble e executa recebe_comando() |
+| 4 | config | P(i2c) | bloqueia, porque o i2c está com o sensor |
+| 5 | sensor | P(log) | bloqueia, porque o log está com a thread_log |
+| 6 | log | P(ble) | bloqueia, porque o ble está com a config |
 
-Depois do passo 6, as três estão bloqueadas e nenhuma vai executar um `V`: **deadlock**. Nesse instante, o grafo de alocação de recursos (seta recurso → thread = alocado; thread → recurso = pedido):
+Depois do passo 6 as três threads estão bloqueadas e nenhuma vai chegar no V. Grafo de alocação nesse momento (seta do recurso para a thread = alocado; seta da thread para o recurso = pedido):
 
 ```mermaid
 flowchart LR
@@ -409,24 +403,24 @@ flowchart LR
     C -->|pede| I2C
 ```
 
-Ciclo: sensor → log → thread_log → ble → config → i2c → sensor. Como cada recurso tem **uma única instância**, ciclo no grafo implica deadlock com certeza.
+O ciclo é sensor, log, thread_log, ble, config, i2c e volta para o sensor. Como cada recurso tem uma instância só, ter um ciclo no grafo já garante que é deadlock.
 
-### A5.2 — As quatro condições de Coffman no código
+### A5.2 As quatro condições
 
-| Condição | Onde aparece |
+| Condição | Onde aparece no código |
 |---|---|
-| **Exclusão mútua** | Os três recursos são protegidos por semáforos binários (iniciados em 1): só uma thread usa o barramento I2C, o arquivo de log ou o rádio BLE por vez. Faz sentido físico, dois acessos simultâneos ao I2C corromperiam a transação |
-| **Posse e espera** | Cada thread chama o segundo `P` **sem soltar o primeiro**: o sensor segura i2c enquanto pede log; o log segura log enquanto pede ble; a config segura ble enquanto pede i2c |
-| **Não preempção** | Um semáforo não pode ser tomado de quem o segurou; só a própria thread faz o `V`. Nenhum mecanismo força a liberação |
-| **Espera circular** | Cada thread pega os recursos numa ordem diferente: (i2c, log), (log, ble), (ble, i2c). Juntas formam o ciclo i2c → log → ble → i2c |
+| Exclusão mútua | Os três recursos são protegidos por semáforos binários (começam em 1), então só uma thread usa o I2C, o log ou o BLE por vez. Isso faz sentido no hardware: dois acessos ao mesmo tempo no barramento I2C corromperiam a leitura |
+| Posse e espera | Cada thread faz o segundo P sem ter liberado o primeiro. O sensor segura o i2c e pede o log, o log segura o log e pede o ble, a config segura o ble e pede o i2c |
+| Não preempção | Não tem como tirar um semáforo de quem pegou. Só a própria thread pode fazer o V |
+| Espera circular | Cada thread pega os recursos numa ordem diferente: (i2c, log), (log, ble) e (ble, i2c). Juntas, essas ordens fecham o ciclo i2c, log, ble, i2c |
 
-As quatro precisam estar presentes ao mesmo tempo; basta quebrar uma para o deadlock ficar impossível.
+As quatro precisam acontecer juntas, então quebrar qualquer uma já impede o deadlock.
 
-### A5.3 — Duas correções de tipos diferentes
+### A5.3 Correções
 
-**Correção 1 — Prevenção: eliminar posse e espera (e, de quebra, a espera circular)**
+Correção 1 (prevenção): tirar a posse e espera.
 
-Olhando o código, **nenhuma das três threads precisa de dois recursos ao mesmo tempo**: o sensor só precisa do log *depois* de ler; o log só precisa do BLE *depois* de ler o arquivo; a config só precisa do I2C *depois* de receber o comando. Então cada thread libera um recurso antes de pedir o próximo, guardando o dado numa variável local:
+Olhando com calma o código, nenhuma das três threads precisa de dois recursos ao mesmo tempo. O sensor só precisa do log depois que terminou de ler, o log só precisa do BLE depois que leu o arquivo, e a config só precisa do I2C depois que recebeu o comando. Então cada thread pode guardar o dado numa variável local, liberar o primeiro recurso e só depois pedir o segundo:
 
 ```
 thread_sensor:          thread_log:            thread_config:
@@ -438,30 +432,30 @@ registra(amostra)       envia(dados)           ajusta_sensor(cmd)
 V(log)                  V(ble)                 V(i2c)
 ```
 
-Nenhuma thread segura um recurso enquanto espera outro, então nunca há posse e espera, e o grafo nunca forma ciclo. Alternativa equivalente se algum par precisar mesmo ser atômico: **ordem global** (i2c < log < ble) e todo mundo pede em ordem crescente, o que quebra a espera circular.
+Assim nenhuma thread segura um recurso enquanto espera outro, e o grafo nunca fecha um ciclo. Se em algum caso dois recursos precisassem mesmo ser usados juntos, outra forma de prevenção seria definir uma ordem fixa (i2c antes de log, log antes de ble) e todas as threads pedirem nessa ordem, o que quebra a espera circular.
 
-*O que muda para quem usa a pulseira:* nada visível, e um ganho: o deadlock deixa de ser possível por construção, e o barramento I2C fica preso por menos tempo (o sensor não segura o I2C enquanto escreve no log), então a próxima leitura fica livre mais cedo, o que reduz a latência no caminho crítico.
+Para quem usa a pulseira: não muda nada que dê para perceber, e ainda melhora um pouco. O deadlock deixa de ser possível, e o barramento I2C fica preso por menos tempo (o sensor não fica com ele enquanto escreve no log), então a próxima leitura fica livre mais cedo.
 
-**Correção 2 — Detecção e recuperação: watchdog**
+Correção 2 (detecção e recuperação): watchdog.
 
-Cada thread crítica (sensor e motor) atualiza um *heartbeat* a cada ciclo. Um **watchdog de hardware** do SoC precisa ser "alimentado" a cada, por exemplo, 200 ms; se o heartbeat parar (o sistema travou, seja por este deadlock ou por qualquer outro bug), o watchdog não é alimentado e reinicia a pulseira sozinho. Antes de reiniciar (ou logo ao voltar), o motor dá **um pulso longo** para avisar a pessoa. Ele precisa ser de hardware: um watchdog implementado como mais uma thread poderia ficar preso no mesmo deadlock.
+As threads críticas (sensor e motor) atualizam um sinal de vida a cada ciclo. Um watchdog de hardware do processador precisa ser "alimentado" a cada, por exemplo, 200 ms. Se esse sinal parar de vir (por esse deadlock ou por qualquer outro travamento), o watchdog não é alimentado e reinicia a pulseira sozinho. Antes de reiniciar, ou logo depois de voltar, o motor dá um pulso longo para avisar a pessoa. Tem que ser um watchdog de hardware, porque se ele fosse só mais uma thread, poderia ficar preso no mesmo deadlock.
 
-*O que muda para quem usa a pulseira:* o "congelou até eu desligar e ligar" vira **alguns segundos sem vibração (≈ 4 s, pelo dado da Parte B), avisados por um pulso longo**, e a pulseira volta sozinha. É uma melhora enorme, mas o deadlock continua acontecendo: a pessoa ainda fica uns segundos "cega", e se isso acontecer bem na frente de um obstáculo, o risco é real. Por isso o watchdog é rede de segurança (e deve existir mesmo depois da correção 1, contra bugs que ainda não conhecemos), não a solução definitiva.
+Para quem usa a pulseira: em vez de congelar até a pessoa desligar e ligar, ela fica alguns segundos sem vibração (uns 4 s, pelo que diz a Parte B), recebe o aviso do pulso longo e a pulseira volta sozinha. Melhora muito, mas o deadlock continua acontecendo, e se acontecer bem na frente de um obstáculo a pessoa ainda fica sem aviso nesses segundos. Por isso eu vejo o watchdog como uma proteção extra, que vale manter mesmo depois da correção 1 para pegar bugs que a gente ainda não conhece, e não como a solução do problema.
 
 ---
 
-# Parte B — A decisão do CTO
+# Parte B: a decisão do CTO
 
-## Memorando ao Conselho da Tato — Dilema 2: qual processador vai para a produção
+## Memorando ao conselho da Tato (Dilema 2: qual processador vai para a produção)
 
-**Decisão: a Tato vai produzir com a Plataforma H com o acelerador DSP, a R$ 37 por unidade.**
+Decidi que a Tato vai para a produção com a Plataforma H com o acelerador DSP, a R$ 37 por unidade.
 
-**Por quê.** Nossos números da Parte A: a H sozinha processa uma amostra em **5,000 ms**, exatamente no limite de 5 ms: margem zero, descartada. A V atende, com **4,17 ms** no pior caso, mas 3 ms disso são o Linux, e o tempo depende de a taxa de falta de cache ficar abaixo de **~9%** (hoje 5%): é um prazo que *provavelmente* cumprimos. A H com DSP leva **2,6 ms**, sem sistema operacional e sem cache, ou seja, o mesmo tempo em toda amostra, com 48% de margem. Num produto em que um atraso significa a pessoa trombar num poste, eu prefiro a garantia determinística à média rápida. O que mais pesou foi isto: na V, o pior caso não é calculado, é um "até 3 ms" que o Linux sem tempo real não garante formalmente.
+Por que: pelos cálculos da Parte A, a H sem DSP processa uma amostra em 5,000 ms, exatamente no limite, então está descartada. A V cumpre o prazo, com 4,17 ms no pior caso, mas 3 ms disso são do Linux, e ela só se mantém dentro do prazo enquanto a taxa de falta na cache ficar abaixo de uns 9% (hoje é 5%). A H com DSP leva 2,6 ms, sem sistema operacional e sem cache, então leva o mesmo tempo em toda amostra e ainda sobra 48% de folga. Num produto em que um atraso pode fazer a pessoa bater num poste, eu prefiro um tempo garantido a um tempo médio mais rápido. O que mais pesou foi que o pior caso da V não é algo que a gente calculou, é um "até 3 ms" que um Linux comum não garante.
 
-**Do que estamos abrindo mão.** Abrimos mão da **atualização pela internet (OTA)**. Toda correção de firmware, inclusive de segurança, exigirá cabo na assistência técnica. Quem paga esse custo é, primeiro, **o usuário**: uma pessoa com deficiência visual terá que se deslocar até a assistência para receber uma correção, o que é um custo real de acessibilidade. E paga a **empresa**, em logística: se o deadlock da A5 tivesse ido para o campo, teríamos que fazer um recall em vez de mandar um patch. Para reduzir isso, vamos oferecer troca por correio (mandamos uma pulseira atualizada, recebemos a antiga) e testar o firmware muito mais antes de lançar. Em troca, economizamos **R$ 33 por unidade (R$ 66 mil no primeiro lote de 2.000)** e ganhamos bateria, porque um microcontrolador de 48 MHz com SRAM consome muito menos que um SoC de 1,2 GHz com DRAM.
+Do que estou abrindo mão: da atualização pela internet. Qualquer correção de firmware, inclusive de segurança, vai precisar de cabo na assistência técnica. Quem paga isso primeiro é o usuário, porque uma pessoa com deficiência visual vai ter que se deslocar até a assistência para receber uma correção, e isso é um custo real de acessibilidade. A empresa também paga, em logística: se o deadlock da A5 tivesse chegado ao campo, seria um recall em vez de uma atualização remota. Para diminuir esse custo, vamos oferecer troca pelo correio (mandamos uma pulseira atualizada e recebemos a antiga) e testar muito mais o firmware antes de cada lote. Em troca, economizamos R$ 33 por unidade (R$ 66 mil nas 2.000 primeiras) e a bateria dura mais, já que um microcontrolador de 48 MHz com SRAM gasta bem menos que um processador de 1,2 GHz com DRAM.
 
-**Impacto no usuário e risco de segurança.** Para quem usa, a H com DSP é a opção mais previsível: a vibração chega sempre no mesmo tempo, e a bateria dura mais. Do lado da segurança, a superfície de ataque é muito menor (sem Linux, sem pilha de rede, só o BLE), mas o risco que escolhemos aceitar é este: **se aparecer uma vulnerabilidade no BLE, ela ficará nas pulseiras em campo por semanas, até cada pessoa trocar o firmware**. Por isso o módulo BLE será mínimo: ele só envia log e aceita um conjunto fechado de comandos validados, e nenhum comando pode desligar a vibração.
+Impacto no usuário e risco de segurança: para quem usa, a H com DSP é a opção mais previsível, porque a vibração chega sempre no mesmo tempo. Na segurança, ela tem muito menos superfície de ataque (sem Linux e sem pilha de rede, só o BLE). O risco que estamos aceitando é que, se for encontrada uma falha no BLE, ela vai continuar nas pulseiras por semanas, até cada pessoa atualizar. Por isso o BLE vai ser o mínimo possível: só envia log e aceita uma lista fechada de comandos, e nenhum comando consegue desligar a vibração.
 
-**O que me faria mudar de ideia.** Se um teste de estresse de 72 horas na Plataforma V com Linux PREEMPT_RT (kernel de tempo real) mostrar **latência máxima do sistema abaixo de 1 ms**, o pior caso da V cai para ~2,2 ms, igual ou melhor que os 2,6 ms da H com DSP. Nesse cenário, a diferença de R$ 33 por unidade compraria o OTA sem sacrificar o prazo, e eu recomendaria migrar para a V no segundo lote.
+O que me faria mudar de ideia: se um teste de 72 horas na Plataforma V com Linux de tempo real (PREEMPT_RT) mostrar que o atraso máximo do sistema fica abaixo de 1 ms, o pior caso da V cai para uns 2,2 ms, que é igual ou melhor que os 2,6 ms da H com DSP. Nesse caso, os R$ 33 a mais por unidade comprariam a atualização pela internet sem colocar o prazo em risco, e eu recomendaria trocar para a V a partir do segundo lote.
 
-— Anne Esther Lins Figueirôa, CTO
+Anne Esther Lins Figueirôa, CTO

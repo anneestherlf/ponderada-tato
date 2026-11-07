@@ -1,4 +1,4 @@
-# Ponderada CC08 — Tato: do pipeline ao deadlock
+# Ponderada CC08: do pipeline ao deadlock (Tato)
 
 **Anne Esther Lins Figueirôa**
 
