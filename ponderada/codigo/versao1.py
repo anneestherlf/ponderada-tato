@@ -89,9 +89,19 @@ def executar(total: int) -> dict:
                 time.sleep(0)
 
     resultado = {}
+
+    def rodar_consumidor() -> None:
+        """
+        Executa o consumidor dentro da thread e guarda o retorno dele.
+
+        Parâmetros: nenhum.
+        Retorno: nenhum. O resultado (True se travou) fica em resultado["travou"],
+        porque o retorno de uma função de thread não volta para quem a criou.
+        """
+        resultado["travou"] = consumidor()
+
     t_prod = threading.Thread(target=produtor, daemon=True)
-    t_cons = threading.Thread(
-        target=lambda: resultado.__setitem__("travou", consumidor()), daemon=True)
+    t_cons = threading.Thread(target=rodar_consumidor, daemon=True)
     t_prod.start()
     t_cons.start()
     t_cons.join()
